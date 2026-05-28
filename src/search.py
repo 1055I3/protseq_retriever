@@ -43,7 +43,7 @@ def search_protein_top_k(
         )
 
     response = default_api_client.request_with_retry(
-        "POST", f"{SEARCH_SERVICE_URL}/search/protein",
+        "POST", f"{SEARCH_SERVICE_URL}/search",
         json={"sequence": query_sequence, "k": k}
     )
     results = response.json()["results"]

@@ -15,6 +15,7 @@ _DATA_DIR = os.getenv("BIOSEQ_DATA_DIR", os.path.join("bioseq_retriever", "data"
 DEFAULT_H5_PATH = os.getenv("BIOSEQ_H5_PATH", os.path.join(_DATA_DIR, "per-protein.h5"))
 DEFAULT_INDEX_PATH = os.getenv("BIOSEQ_INDEX_PATH", os.path.join(_DATA_DIR, "per-protein.index"))
 DEFAULT_CACHE_PATH = os.getenv("BIOSEQ_ACCESSIONS_CACHE_PATH", os.path.join(_DATA_DIR, "per-protein.accessions.json"))
+SWISSPROT_CSV_PATH = os.getenv("BIOSEQ_SWISSPROT_CSV_PATH", os.path.join(_DATA_DIR, "swissprot_metadata.csv"))
 
 # --- FAISS HNSW Tuning ---
 HNSW_M = 128
@@ -23,7 +24,7 @@ HNSW_EF_SEARCH = 2048
 RANDOM_SEED = 42
 
 # --- Model Settings ---
-PROTEIN_MODEL_NAME = "Rostlab/prot_t5_xl_uniref50"
+PROTEIN_MODEL_NAME = "esmc-300m-2024-12"
 REFINE_MODEL_NAME = os.getenv("BIOSEQ_REFINE_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 
 # Internal sensitivity constant for the refine signal (Maximum refiner authority)
@@ -31,6 +32,7 @@ REFINE_LAMBDA = 1
 
 # Length limits
 REFINE_MAX_LENGTH = 2048
+ESMC_MAX_LENGTH = 2048 # Model limit
 
 # --- Default FAISS Threads ---
 DEFAULT_FAISS_THREADS = int(os.getenv("FAISS_DEFAULT_THREADS", max(1, os.cpu_count())))

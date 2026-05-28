@@ -8,24 +8,32 @@ import asyncio
 import torch
 import traceback
 import re
+import polars as pl
+import logging
 from typing import List, Tuple, Generator, Dict, Any, Optional, Union
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from transformers import T5EncoderModel, T5Tokenizer, AutoModel, AutoTokenizer
+from esm.models.esmc import ESMC
+from esm.sdk.api import ESMProtein
+from transformers import AutoModel, AutoTokenizer
 from concurrent.futures import ThreadPoolExecutor
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 # Add parent dir to path to import config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.config import (
-    DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH,
+    DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH, SWISSPROT_CSV_PATH,
     HNSW_M, HNSW_EF_CONSTRUCTION, HNSW_EF_SEARCH, RANDOM_SEED,
     SEARCH_SERVICE_HOST, SEARCH_SERVICE_PORT,
     PROTEIN_MODEL_NAME, REFINE_MODEL_NAME,
     DEFAULT_FAISS_THREADS, H5_BATCH_SIZE,
-    REFINE_LAMBDA, REFINE_MAX_LENGTH
+    REFINE_LAMBDA, REFINE_MAX_LENGTH, ESMC_MAX_LENGTH
 )
 
-app = FastAPI(title="Unified BioSeq Gateway Service")
+app = FastAPI(title="Unified BioSeq Gateway Service (ESMC-300M)")
 executor = ThreadPoolExecutor(max_workers=8)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -38,7 +46,8 @@ np.random.seed(RANDOM_SEED)
 TOTAL_CORES = os.cpu_count() or 1
 faiss.omp_set_num_threads(TOTAL_CORES)
 torch.set_num_threads(TOTAL_CORES)
-print(f"Parallelism Optimized: FAISS and PyTorch using {TOTAL_CORES} threads.")
+torch.set_num_interop_threads(TOTAL_CORES)
+logger.info(f"Parallelism Optimized: FAISS and PyTorch using {TOTAL_CORES} threads (Intra/Inter-op).")
 
 # =============================================================================
 # DATA STRUCTURES
@@ -54,123 +63,109 @@ class RefineRequest(BaseModel):
     top_n: int = 5
 
 # =============================================================================
-# MODEL INITIALIZATION
+# SERVICE STATE (Models & Data)
 # =============================================================================
 
-# Global references
 protein_model = None
-protein_tokenizer = None
 refine_model = None
 refine_tokenizer = None
+protein_index = None
+protein_accessions = None
+metadata_df = None
 
-def init_models():
-    global protein_model, protein_tokenizer, refine_model, refine_tokenizer
+def validate_data_files():
+    """Checks if all required data files exist."""
+    missing = []
+    if not os.path.exists(DEFAULT_H5_PATH): missing.append("Embeddings (H5)")
+    if not os.path.exists(DEFAULT_INDEX_PATH): missing.append("FAISS Index")
+    if not os.path.exists(DEFAULT_CACHE_PATH): missing.append("Accession Cache")
+    if not os.path.exists(SWISSPROT_CSV_PATH): missing.append("Swiss-Prot Metadata (CSV)")
     
-    print(f"Loading Protein model: {PROTEIN_MODEL_NAME}...")
-    protein_tokenizer = T5Tokenizer.from_pretrained(PROTEIN_MODEL_NAME, do_lower_case=False)
-    protein_model = T5EncoderModel.from_pretrained(PROTEIN_MODEL_NAME).to(device)
-    protein_model.eval()
+    if missing:
+        msg = f"CRITICAL: Missing required data files: {', '.join(missing)}. " \
+              "Please run 'python data_prep/orchestrator.py' to prepare the database."
+        logger.error(msg)
+        return False
+    return True
 
-    print(f"Loading Refining model: {REFINE_MODEL_NAME}...")
-    refine_tokenizer = AutoTokenizer.from_pretrained(REFINE_MODEL_NAME, padding_side="left")
-    refine_model = AutoModel.from_pretrained(REFINE_MODEL_NAME).to(device)
-    refine_model.eval()
+def init_service():
+    global protein_model, refine_model, refine_tokenizer, protein_index, protein_accessions, metadata_df
     
-    print(f"All models loaded on {device}")
+    if not validate_data_files():
+        return
 
-init_models()
+    try:
+        # 1. Load ESMC Model
+        logger.info(f"Loading ESMC Model: {PROTEIN_MODEL_NAME} to {device}...")
+        protein_model = ESMC.from_pretrained(PROTEIN_MODEL_NAME).to(device)
+        protein_model.eval()
 
-# =============================================================================
-# INDEX MANAGEMENT
-# =============================================================================
+        # 2. Load Refining model
+        logger.info(f"Loading Refining model: {REFINE_MODEL_NAME}...")
+        refine_tokenizer = AutoTokenizer.from_pretrained(REFINE_MODEL_NAME, padding_side="left")
+        refine_model = AutoModel.from_pretrained(REFINE_MODEL_NAME).to(device)
+        refine_model.eval()
 
-def iter_embeddings(h5_path: str, batch_size: int = H5_BATCH_SIZE) -> Generator[Tuple[np.ndarray, List[str]], None, None]:
-    # Use libver='latest' to handle modern HDF5 layout messages
-    with h5py.File(h5_path, 'r', libver='latest') as f:
-        # Filter keys to ensure we only process actual datasets
-        all_keys = list(f.keys())
-        accessions = [k for k in all_keys if isinstance(f[k], h5py.Dataset)]
+        # 3. Load FAISS Index and Accessions
+        logger.info(f"Loading FAISS index from {DEFAULT_INDEX_PATH}...")
+        protein_index = faiss.read_index(DEFAULT_INDEX_PATH)
+        if hasattr(protein_index, "hnsw"):
+            protein_index.hnsw.efSearch = HNSW_EF_SEARCH
+            
+        with open(DEFAULT_CACHE_PATH, 'r') as f:
+            protein_accessions = json.load(f)
 
-        if not accessions:
-            raise ValueError(f"HDF5 file {h5_path} contains no valid datasets.")
-
-        # Infer dimension from the first valid dataset
-        dim = f[accessions[0]].shape[0]
+        # 4. Load Metadata CSV
+        logger.info(f"Loading metadata from {SWISSPROT_CSV_PATH}...")
+        metadata_df = pl.read_csv(SWISSPROT_CSV_PATH)
+        metadata_df = metadata_df.with_columns(pl.col("accession").alias("_idx_acc"))
         
-        for i in range(0, len(accessions), batch_size):
-            batch_accs = accessions[i : i + batch_size]
-            batch_embeddings = np.zeros((len(batch_accs), dim), dtype=np.float32)
-            for j, acc in enumerate(batch_accs):
-                batch_embeddings[j] = f[acc][:]
-            yield batch_embeddings, batch_accs
+        logger.info("Service successfully initialized.")
+        
+    except Exception as e:
+        logger.critical(f"Failed to initialize service: {e}")
+        logger.critical(traceback.format_exc())
+        sys.exit(1)
 
-def build_index(h5_path: str, index_path: str, name: str) -> faiss.IndexHNSWIP:
-    index = None
-    for batch_embeddings, _ in iter_embeddings(h5_path):
-        dim = batch_embeddings.shape[1]
-        if index is None:
-            print(f"Building {name} HNSW index (M={HNSW_M}, efConstruction={HNSW_EF_CONSTRUCTION})...")
-            index = faiss.IndexHNSWIP(dim, HNSW_M)
-            index.hnsw.efConstruction = HNSW_EF_CONSTRUCTION
-        faiss.normalize_L2(batch_embeddings)
-        index.add(batch_embeddings)
-    if index_path:
-        faiss.write_index(index, index_path)
-    return index
-
-def load_or_create_index(h5_path: str, index_path: str, cache_path: str, name: str) -> Tuple[faiss.IndexHNSWIP, List[str]]:
-    if os.path.exists(index_path) and os.path.exists(cache_path):
-        print(f"Loading existing {name} index...")
-        index = faiss.read_index(index_path)
-        with open(cache_path, 'r') as f:
-            accessions = json.load(f)
-        return index, accessions
-    
-    # If index or cache missing, build it
-    index = build_index(h5_path, index_path, name)
-
-    # Extract and cache accessions (ensuring we only cache dataset keys)
-    with h5py.File(h5_path, 'r', libver='latest') as f:
-        accessions = [k for k in f.keys() if isinstance(f[k], h5py.Dataset)]
-
-    with open(cache_path, 'w') as f:
-        json.dump(accessions, f)
-
-    return index, accessions
-
-print("Initializing FAISS indices...")
-protein_index, protein_accessions = load_or_create_index(DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH, "Protein")
-
-print("Indices ready.")
+# Initialize on startup
+init_service()
 
 # =============================================================================
 # INTERNAL LOGIC (CORE)
 # =============================================================================
 
-# --- Embedding ---
-
 def _embed_protein(sequence: str) -> np.ndarray:
-    # ProtT5 reference recipe: substitute rare/ambiguous residues with X
-    seq = re.sub(r"[UZOB]", "X", sequence.upper())
-    processed_seq = " ".join(list(seq))
+    """Generates mean-pooled ESMC-300M embedding."""
+    if len(sequence) > ESMC_MAX_LENGTH:
+        raise ValueError(f"Sequence length ({len(sequence)}) exceeds ESMC limit ({ESMC_MAX_LENGTH})")
     
-    inputs = protein_tokenizer(processed_seq, return_tensors="pt").to(device)
+    protein = ESMProtein(sequence=sequence)
+    
     with torch.no_grad():
-        outputs = protein_model(**inputs, return_dict=True)
-        # Exclude the trailing </s> (EOS) token from the mean pool to match bio_embeddings distribution
-        residue_embeddings = outputs.last_hidden_state[0, :len(seq), :]
+        output = protein_model(protein)
+        emb = output.embeddings.mean(dim=1).cpu().numpy().flatten().astype(np.float32)
+    return emb
+
+def _enrich_results(accessions: List[str], scores: List[float]) -> List[Dict[str, Any]]:
+    """Enriches accession hits with local Swiss-Prot metadata using Polars."""    
+    # Efficient lookup using polars
+    hits_df = metadata_df.filter(pl.col("accession").is_in(accessions))
+    
+    # Map scores back
+    score_map = {acc: score for acc, score in zip(accessions, scores)}
+    
+    records = hits_df.to_dicts()
+    for rec in records:
+        rec["_search_score"] = score_map.get(rec["accession"])
         
-    return residue_embeddings.mean(dim=0).cpu().numpy().astype(np.float32)
+    # Maintain FAISS order
+    acc_to_idx = {acc: i for i, acc in enumerate(accessions)}
+    records.sort(key=lambda x: acc_to_idx.get(x["accession"], 999))
+    return records
 
 def _embed_refine_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
-    """
-    Generates semantic embeddings using Qwen3-Embedding.
-    1. Uses last-token pooling (standard for decoder-based embeddings).
-    2. Uses explicit max_length and truncation.
-    3. Distinct paths for query (with instructions) and documents (plain text).
-    """
+    """Generates semantic embeddings using Qwen3-Embedding."""
     if is_query:
-        # Instruction-aware path for queries
         instruction = (
             "Given a bioinformatics context or sequence retrieval prompt, identify relevant biological "
             "entities, molecular functions, biological processes, protein families and domains, "
@@ -179,7 +174,6 @@ def _embed_refine_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
         )
         processed_texts = [f"{instruction}\nQuery: {t}" for t in texts]
     else:
-        # Plain text path for documents
         processed_texts = texts
         
     inputs = refine_tokenizer(
@@ -192,23 +186,9 @@ def _embed_refine_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
 
     with torch.no_grad():
         outputs = refine_model(**inputs, return_dict=True)
-        # Use last-token pooling of the last hidden state
-        # Explicitly cast to float32 before numpy conversion (numpy does not support bfloat16)
         embeddings = outputs.last_hidden_state[:, -1].to(torch.float32)
         
     return embeddings.cpu().numpy()
-
-# --- Search ---
-
-def _perform_vector_search(index, query_emb: np.ndarray, k: int):
-    query_vec = query_emb.reshape(1, -1)
-    faiss.normalize_L2(query_vec)
-    # Apply HNSW specific search parameters if applicable
-    if hasattr(index, "hnsw"):
-        index.hnsw.efSearch = HNSW_EF_SEARCH
-    return index.search(query_vec, k)
-
-# --- Refining Helpers ---
 
 def _format_record_for_embedding(record: Dict[str, Any]) -> str:
     """
@@ -266,16 +246,12 @@ def _format_record_for_embedding(record: Dict[str, Any]) -> str:
 # =============================================================================
 
 def _normalize_z_score(scores: np.ndarray) -> np.ndarray:
-    """
-    Performs Z-score normalization for scale robustness and translation invariance.
-    Ensures both retrieval and semantic signals are in a comparable space.
-    """
     mu = np.mean(scores)
     sigma = np.std(scores) + 1e-9
     return (scores - mu) / sigma
 
 def _compute_conformal_uncertainty(scores: np.ndarray) -> np.ndarray:
-    """
+        """
     Estimates local posterior uncertainty using local conformal nonconformity.
     
     Mathematical Principle:
@@ -320,15 +296,24 @@ def _compute_conformal_uncertainty(scores: np.ndarray) -> np.ndarray:
 # ENDPOINTS
 # =============================================================================
 
-@app.post("/search/protein")
-async def search_protein(request: SearchRequest):
+@app.post("/search")
+async def search(request: SearchRequest):
     try:
         loop = asyncio.get_event_loop()
         emb = await loop.run_in_executor(executor, _embed_protein, request.sequence)
-        dist, idxs = await loop.run_in_executor(executor, _perform_vector_search, protein_index, emb, request.k)
-        results = [{"accession": protein_accessions[i], "score": float(dist[0][j])} for j, i in enumerate(idxs[0]) if i != -1]
+        
+        query_vec = emb.reshape(1, -1)
+        faiss.normalize_L2(query_vec)
+        dist, idxs = await loop.run_in_executor(executor, protein_index.search, query_vec, request.k)
+        
+        accessions = [protein_accessions[i] for i in idxs[0] if i != -1]
+        scores = [float(s) for s in dist[0][:len(accessions)]]
+        
+        results = await loop.run_in_executor(executor, _enrich_results, accessions, scores)
         return {"results": results}
+        
     except Exception as e:
+        logger.error(f"Search failed: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -353,18 +338,15 @@ async def refine(request: RefineRequest):
         semantic_z = _normalize_z_score(semantic_scores)
 
         # 4. Conformal Ranking Uncertainty Estimation (α_i)
-        # Parameter-free and distribution-free exchangeability estimation.
         alpha = _compute_conformal_uncertainty(retrieval_z)
 
         # 5. Principled Confidence-Aware Fusion
         # f_i = s_i + α_i * λ * (r_i - s_i)
         # Correction is applied only where the retrieval ranking is statistically exchangeable.
-        LAMBDA = REFINE_LAMBDA
-        
         refined_list = []
         for i, record in enumerate(request.records):
-            final_fused_score = retrieval_z[i] + (alpha[i] * LAMBDA * (semantic_z[i] - retrieval_z[i]))
-            
+            final_fused_score = retrieval_z[i] + (alpha[i] * REFINE_LAMBDA * (semantic_z[i] - retrieval_z[i]))
+
             # Store metadata for transparency
             record["_search_score"] = float(final_fused_score)
             record["_uncertainty_alpha"] = float(alpha[i])
@@ -372,9 +354,11 @@ async def refine(request: RefineRequest):
 
         # 6. Stable Rank Sort
         refined_list.sort(key=lambda x: x["_search_score"], reverse=True)
-        
+
         return {"results": refined_list[:request.top_n]}
+        
     except Exception as e:
+        logger.error(f"Refining failed: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

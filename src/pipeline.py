@@ -9,7 +9,6 @@ import asyncio
 import json
 
 from src.utils import get_llm, clean_sequence
-from src.data_fetcher import get_uniprot_records
 from src.search import search_protein_top_k
 from src.refining import LocalRefiner
 
@@ -17,7 +16,7 @@ from src.config import RETRIEVAL_TOP_K, REFINE_TOP_N
 
 
 # =============================================================================
-# SCHEMA-GUIDED EXTRACTION DEFINITIONS
+# DATA SCHEMAS
 # =============================================================================
 
 class AnalysisFailure(BaseModel):
@@ -43,9 +42,9 @@ class ExtractionAnalysis(BaseModel):
 
 class SummaryResult(BaseModel):
     """Plain-language explanation of retrieval results for non-experts."""
-    overview: str = Field(description="A 2-3 sentence high-level summary of the findings in simple, non-technical terms.")
-    detailed_explanations: List[str] = Field(description="Simplified explanations for each of the top matches, explaining why they are relevant to the user's specific query context.")
-    biological_significance: str = Field(description="A summary of why these results matter biologically, written for a general audience without using arcane jargon.")
+    overview: str = Field(description="A comprehensive 3-5 sentence high-level summary of the findings in simple, non-technical terms. Explain what these proteins do and why they matched the user's interest.")
+    detailed_explanations: List[str] = Field(description="Thorough explanations for each of the top matches, explaining their specific biological role and why they are relevant to the user's query context. Avoid jargon but be scientifically informative.")
+    biological_significance: str = Field(description="A detailed section explaining the broader impact or significance of these findings. For example, if searching for insulin-like proteins, explain their role in energy regulation. Use analogies to make it readable for 'mere mortals'.")
 
 # =============================================================================
 # PIPELINE STATE
@@ -68,22 +67,6 @@ class PipelineState(TypedDict):
 _llm = get_llm(temperature=0)
 _structured_extractor = _llm.with_structured_output(ExtractionAnalysis)
 _structured_summarizer = _llm.with_structured_output(SummaryResult)
-
-# =============================================================================
-# CORE LOGIC (Private Helper Functions)
-# =============================================================================
-
-async def _fetch_enriched_metadata(matches: List[tuple]) -> List[Dict[str, Any]]:
-    """Enriches similarity search matches with UniProt metadata."""
-    accessions = [m[0] for m in matches]
-    records = get_uniprot_records(accessions)
-    
-    # Map scores back to records
-    score_map = {m[0]: m[1] for m in matches}
-    for rec in records:
-        rec["_search_score"] = score_map.get(rec.get("primaryAccession"))
-        
-    return records
 
 # =============================================================================
 # PIPELINE NODES (LCEL Runnables)
@@ -150,18 +133,15 @@ async def extraction_node(state: PipelineState, config: RunnableConfig) -> Pipel
 
 @skip_on_error
 async def search_node(state: PipelineState, config: RunnableConfig) -> PipelineState:
-    """Responsibility: High-speed HNSW vector search and metadata enrichment."""
-    matches = search_protein_top_k(state["sequence"], k=RETRIEVAL_TOP_K)
-    if not matches:
-        state["results"] = []
-        return state
-        
-    state["results"] = await _fetch_enriched_metadata(matches)
+    """Responsibility: High-speed HNSW vector search using ESMC-300M backend."""
+    # Search service now returns ENRICHED results (metadata + scores)
+    results = search_protein_top_k(state["sequence"], k=RETRIEVAL_TOP_K)
+    state["results"] = results
     return state
 
 @skip_on_error
 async def refinement_node(state: PipelineState, config: RunnableConfig) -> PipelineState:
-    """Responsibility: Context-aware semantic refining with fallback."""
+    """Responsibility: Context-aware semantic refining with uncertainty-aware fusion."""
     if not state.get("results"): return state
 
     try:
@@ -180,7 +160,7 @@ async def refinement_node(state: PipelineState, config: RunnableConfig) -> Pipel
 
 @skip_on_error
 async def summary_node(state: PipelineState, config: RunnableConfig) -> PipelineState:
-    """Responsibility: Explain results in plain language for non-experts."""
+    """Responsibility: Explain results in plain language for non-experts ('mere mortals')."""
     if not state.get("results"): return state
 
     system_message = (
@@ -188,25 +168,24 @@ async def summary_node(state: PipelineState, config: RunnableConfig) -> Pipeline
         "Your goal is to provide a thorough, clear summary of protein search results without using arcane molecular biology jargon.\n\n"
         
         "### YOUR PROTOCOL:\n"
-        "1. **TRANSLATE JARGON**: Instead of 'catalytic domain' say 'the part of the protein that does the work'. Instead of 'HNSW index' or 'semantic refining', focus on 'relevance' and 'similarity'.\n"
-        "2. **CONTEXTUALIZE**: Explain *why* these proteins are relevant to the user's original query.\n"
-        "3. **PLAIN LANGUAGE**: Use simple analogies and clear sentences. Be empathetic to a reader who lacks an advanced degree in biochemistry."
+        "1. **TRANSLATE JARGON**: Instead of 'catalytic domain' say 'the functional part'. Instead of 'HNSW index' or 'conformal uncertainty', focus on 'reliability' and 'similarity'.\n"
+        "2. **CONTEXTUALIZE**: Deeply explain *why* these proteins are relevant to the user's original query. Connect the dots between the sequence and the function.\n"
+        "3. **PLAIN LANGUAGE**: Use simple analogies. For example, compare a protein's function to a key in a lock or a worker in a factory.\n"
+        "4. **THOROUGHNESS**: Ensure the summary is comprehensive yet accessible."
     )
 
-    # Prepare a condensed version of results for the summarizer
-    condensed_results = []
+    # Use the rich metadata returned by the search service
+    results_for_llm = []
     for r in state["results"]:
-        desc = r.get('proteinDescription', {}).get('recommendedName', {}).get('fullName', {}).get('value', 'N/A')
-        org = r.get('organism', {}).get('scientificName', 'N/A')
-        funcs = [c.get('texts', [{}])[0].get('value', '') for c in r.get('comments', []) if c.get('commentType') == 'FUNCTION']
-        condensed_results.append({
-            "accession": r.get("primaryAccession"),
-            "name": desc,
-            "organism": org,
-            "functions": funcs[:2]
+        results_for_llm.append({
+            "accession": r.get("accession"),
+            "name": r.get("protein_name"),
+            "organism": r.get("organism_name"),
+            "function": r.get("comments"),
+            "gene": r.get("gene_names")
         })
 
-    prompt = f"User Context: {state['context']}\n\nTop Retrieved Proteins:\n{json.dumps(condensed_results, indent=2)}"
+    prompt = f"User Context: {state['context']}\n\nTop Retrieved Proteins:\n{json.dumps(results_for_llm, indent=2)}"
 
     summary = await _structured_summarizer.ainvoke([
         SystemMessage(content=system_message),
