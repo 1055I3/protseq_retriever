@@ -24,12 +24,12 @@ BACKOFF_FACTOR = float(os.getenv("BIOSEQ_BACKOFF_FACTOR", "2.0"))
 SEARCH_PROBE_TIMEOUT = float(os.getenv("BIOSEQ_SEARCH_PROBE_TIMEOUT", "2.0"))
 
 # --- Services (Microservices) ---
-# All retrieval and reranking are now handled by a single unified gateway on port 8002
+# All retrieval and refining are now handled by a single unified gateway on port 8002
 SEARCH_SERVICE_URL = os.getenv("BIOSEQ_SEARCH_SERVICE_URL", "http://localhost:8002")
 
 # --- Retrieval Settings ---
 RETRIEVAL_TOP_K = 75
-RERANK_TOP_N = 5
+REFINE_TOP_N = 5
 
 # Toggle to use services instead of local loading
 USE_SERVICES = os.getenv("BIOSEQ_USE_SERVICES", "true").lower() == "true"

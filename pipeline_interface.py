@@ -30,11 +30,10 @@ def parse_args():
         type=str, 
         nargs="?",
         default=(
-            "I have a sequence in 'data/per-protein.faa' (just kidding, it's actually here: "
-            "MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKTRREAEDLQVGQVELGGGPGAGSLQPLALEGSLQKRGIVEQCCTSICSLYQLENYCN). "
+            "I have a sequence: MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKTRREAEDLQVGQVELGGGPGAGSLQPLALEGSLQKRGIVEQCCTSICSLYQLENYCN. "
             "I am looking for sequences involved in glucose metabolism or structurally related to human insulin."
         ),
-        help="The natural language prompt containing a biological sequence or file path."
+        help="The natural language prompt containing a biological protein sequence."
     )
     return parser.parse_args()
 
@@ -52,10 +51,9 @@ def main():
             return
 
         print("\n--- Pipeline Summary ---")
-        print(f"Detected Type: {result.get('sequence_type')}")
         print(f"Sequence Length: {len(result.get('sequence') or '')}")
 
-        print("\n--- Top 5 Context-Aware Matches (UniProt JSON) ---")
+        print("\n--- Top Matches (UniProt JSON) ---")
         # result['results'] contains the finalized top matches
         final_results = result.get("results", [])
 

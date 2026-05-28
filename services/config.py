@@ -1,7 +1,7 @@
 import os
 
 # --- Service Addresses ---
-# The unified gateway handles all biological retrieval and reranking
+# The unified gateway handles all biological retrieval and refining
 SEARCH_SERVICE_HOST = os.getenv("BIOSEQ_SEARCH_HOST", "0.0.0.0")
 SEARCH_SERVICE_PORT = int(os.getenv("BIOSEQ_SEARCH_PORT", "8002"))
 
@@ -24,13 +24,13 @@ RANDOM_SEED = 42
 
 # --- Model Settings ---
 PROTEIN_MODEL_NAME = "Rostlab/prot_t5_xl_uniref50"
-RERANK_MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
+REFINE_MODEL_NAME = os.getenv("BIOSEQ_REFINE_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 
-# Internal sensitivity constant for the rerank signal (Maximum reranker authority)
-RERANK_LAMBDA = 1
+# Internal sensitivity constant for the refine signal (Maximum refiner authority)
+REFINE_LAMBDA = 1
 
 # Length limits
-RERANK_MAX_LENGTH = 2048
+REFINE_MAX_LENGTH = 2048
 
 # --- Default FAISS Threads ---
 DEFAULT_FAISS_THREADS = int(os.getenv("FAISS_DEFAULT_THREADS", max(1, os.cpu_count())))

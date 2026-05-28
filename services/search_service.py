@@ -8,7 +8,7 @@ import asyncio
 import torch
 import traceback
 import re
-from typing import List, Tuple, Generator, Dict, Any, Optional
+from typing import List, Tuple, Generator, Dict, Any, Optional, Union
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from transformers import T5EncoderModel, T5Tokenizer, AutoModel, AutoTokenizer
@@ -20,9 +20,9 @@ from services.config import (
     DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH,
     HNSW_M, HNSW_EF_CONSTRUCTION, HNSW_EF_SEARCH, RANDOM_SEED,
     SEARCH_SERVICE_HOST, SEARCH_SERVICE_PORT,
-    PROTEIN_MODEL_NAME, RERANK_MODEL_NAME,
+    PROTEIN_MODEL_NAME, REFINE_MODEL_NAME,
     DEFAULT_FAISS_THREADS, H5_BATCH_SIZE,
-    RERANK_LAMBDA, RERANK_MAX_LENGTH
+    REFINE_LAMBDA, REFINE_MAX_LENGTH
 )
 
 app = FastAPI(title="Unified BioSeq Gateway Service")
@@ -48,7 +48,7 @@ class SearchRequest(BaseModel):
     sequence: str
     k: int = 25
 
-class RerankRequest(BaseModel):
+class RefineRequest(BaseModel):
     records: List[Dict[str, Any]]
     context_query: str
     top_n: int = 5
@@ -60,21 +60,21 @@ class RerankRequest(BaseModel):
 # Global references
 protein_model = None
 protein_tokenizer = None
-rerank_model = None
-rerank_tokenizer = None
+refine_model = None
+refine_tokenizer = None
 
 def init_models():
-    global protein_model, protein_tokenizer, rerank_model, rerank_tokenizer
+    global protein_model, protein_tokenizer, refine_model, refine_tokenizer
     
     print(f"Loading Protein model: {PROTEIN_MODEL_NAME}...")
     protein_tokenizer = T5Tokenizer.from_pretrained(PROTEIN_MODEL_NAME, do_lower_case=False)
     protein_model = T5EncoderModel.from_pretrained(PROTEIN_MODEL_NAME).to(device)
     protein_model.eval()
 
-    print(f"Loading Reranking model: {RERANK_MODEL_NAME}...")
-    rerank_tokenizer = AutoTokenizer.from_pretrained(RERANK_MODEL_NAME, padding_side="left")
-    rerank_model = AutoModel.from_pretrained(RERANK_MODEL_NAME).to(device)
-    rerank_model.eval()
+    print(f"Loading Refining model: {REFINE_MODEL_NAME}...")
+    refine_tokenizer = AutoTokenizer.from_pretrained(REFINE_MODEL_NAME, padding_side="left")
+    refine_model = AutoModel.from_pretrained(REFINE_MODEL_NAME).to(device)
+    refine_model.eval()
     
     print(f"All models loaded on {device}")
 
@@ -104,20 +104,21 @@ def iter_embeddings(h5_path: str, batch_size: int = H5_BATCH_SIZE) -> Generator[
                 batch_embeddings[j] = f[acc][:]
             yield batch_embeddings, batch_accs
 
-def build_index(h5_path: str, index_path: str, name: str) -> faiss.IndexFlatIP:
+def build_index(h5_path: str, index_path: str, name: str) -> faiss.IndexHNSWIP:
     index = None
     for batch_embeddings, _ in iter_embeddings(h5_path):
         dim = batch_embeddings.shape[1]
         if index is None:
-            print(f"Building {name} Exhaustive Flat index...")
-            index = faiss.IndexFlatIP(dim)
+            print(f"Building {name} HNSW index (M={HNSW_M}, efConstruction={HNSW_EF_CONSTRUCTION})...")
+            index = faiss.IndexHNSWIP(dim, HNSW_M)
+            index.hnsw.efConstruction = HNSW_EF_CONSTRUCTION
         faiss.normalize_L2(batch_embeddings)
         index.add(batch_embeddings)
     if index_path:
         faiss.write_index(index, index_path)
     return index
 
-def load_or_create_index(h5_path: str, index_path: str, cache_path: str, name: str) -> Tuple[faiss.IndexFlatIP, List[str]]:
+def load_or_create_index(h5_path: str, index_path: str, cache_path: str, name: str) -> Tuple[faiss.IndexHNSWIP, List[str]]:
     if os.path.exists(index_path) and os.path.exists(cache_path):
         print(f"Loading existing {name} index...")
         index = faiss.read_index(index_path)
@@ -161,7 +162,7 @@ def _embed_protein(sequence: str) -> np.ndarray:
         
     return residue_embeddings.mean(dim=0).cpu().numpy().astype(np.float32)
 
-def _embed_rerank_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
+def _embed_refine_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
     """
     Generates semantic embeddings using Qwen3-Embedding.
     1. Uses last-token pooling (standard for decoder-based embeddings).
@@ -181,16 +182,16 @@ def _embed_rerank_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
         # Plain text path for documents
         processed_texts = texts
         
-    inputs = rerank_tokenizer(
+    inputs = refine_tokenizer(
         processed_texts, 
         padding=True, 
         truncation=True, 
-        max_length=RERANK_MAX_LENGTH, 
+        max_length=REFINE_MAX_LENGTH, 
         return_tensors="pt"
     ).to(device)
 
     with torch.no_grad():
-        outputs = rerank_model(**inputs, return_dict=True)
+        outputs = refine_model(**inputs, return_dict=True)
         # Use last-token pooling of the last hidden state
         # Explicitly cast to float32 before numpy conversion (numpy does not support bfloat16)
         embeddings = outputs.last_hidden_state[:, -1].to(torch.float32)
@@ -202,10 +203,12 @@ def _embed_rerank_texts(texts: List[str], is_query: bool = False) -> np.ndarray:
 def _perform_vector_search(index, query_emb: np.ndarray, k: int):
     query_vec = query_emb.reshape(1, -1)
     faiss.normalize_L2(query_vec)
-    # Enable full parallel computation as requested (removed omp_set_num_threads(1))
+    # Apply HNSW specific search parameters if applicable
+    if hasattr(index, "hnsw"):
+        index.hnsw.efSearch = HNSW_EF_SEARCH
     return index.search(query_vec, k)
 
-# --- Reranking Helpers ---
+# --- Refining Helpers ---
 
 def _format_record_for_embedding(record: Dict[str, Any]) -> str:
     """
@@ -329,15 +332,15 @@ async def search_protein(request: SearchRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/rerank")
-async def rerank(request: RerankRequest):
+@app.post("/refine")
+async def refine(request: RefineRequest):
     try:
         loop = asyncio.get_event_loop()
         
         # 1. Semantic Embedding
         passages = [_format_record_for_embedding(rec) for rec in request.records]
-        query_vec = await loop.run_in_executor(executor, _embed_rerank_texts, [request.context_query], True)
-        doc_vecs = await loop.run_in_executor(executor, _embed_rerank_texts, passages, False)
+        query_vec = await loop.run_in_executor(executor, _embed_refine_texts, [request.context_query], True)
+        doc_vecs = await loop.run_in_executor(executor, _embed_refine_texts, passages, False)
         
         # 2. Raw Semantic Scores (Cosine Similarity)
         query_vec = query_vec / (np.linalg.norm(query_vec, axis=1, keepdims=True) + 1e-9)
@@ -356,21 +359,21 @@ async def rerank(request: RerankRequest):
         # 5. Principled Confidence-Aware Fusion
         # f_i = s_i + α_i * λ * (r_i - s_i)
         # Correction is applied only where the retrieval ranking is statistically exchangeable.
-        LAMBDA = RERANK_LAMBDA
+        LAMBDA = REFINE_LAMBDA
         
-        reranked_list = []
+        refined_list = []
         for i, record in enumerate(request.records):
             final_fused_score = retrieval_z[i] + (alpha[i] * LAMBDA * (semantic_z[i] - retrieval_z[i]))
             
             # Store metadata for transparency
             record["_search_score"] = float(final_fused_score)
             record["_uncertainty_alpha"] = float(alpha[i])
-            reranked_list.append(record)
+            refined_list.append(record)
 
         # 6. Stable Rank Sort
-        reranked_list.sort(key=lambda x: x["_search_score"], reverse=True)
+        refined_list.sort(key=lambda x: x["_search_score"], reverse=True)
         
-        return {"results": reranked_list[:request.top_n]}
+        return {"results": refined_list[:request.top_n]}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
