@@ -16,11 +16,6 @@ DEFAULT_H5_PATH = os.getenv("BIOSEQ_H5_PATH", os.path.join(_DATA_DIR, "per-prote
 DEFAULT_INDEX_PATH = os.getenv("BIOSEQ_INDEX_PATH", os.path.join(_DATA_DIR, "per-protein.index"))
 DEFAULT_CACHE_PATH = os.getenv("BIOSEQ_ACCESSIONS_CACHE_PATH", os.path.join(_DATA_DIR, "per-protein.accessions.json"))
 
-# DNA Specific Paths
-DNA_H5_PATH = os.getenv("BIOSEQ_DNA_H5_PATH", os.path.join(_DATA_DIR, "per-gene.h5"))
-DNA_INDEX_PATH = os.getenv("BIOSEQ_DNA_INDEX_PATH", os.path.join(_DATA_DIR, "per-gene.index"))
-DNA_CACHE_PATH = os.getenv("BIOSEQ_DNA_ACCESSIONS_CACHE_PATH", os.path.join(_DATA_DIR, "per-gene.accessions.json"))
-
 # --- FAISS HNSW Tuning ---
 HNSW_M = 128
 HNSW_EF_CONSTRUCTION = 512
@@ -29,7 +24,6 @@ RANDOM_SEED = 42
 
 # --- Model Settings ---
 PROTEIN_MODEL_NAME = "Rostlab/prot_t5_xl_uniref50"
-DNA_MODEL_NAME = "LongSafari/hyenadna-medium-160k-seqlen-hf"
 RERANK_MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
 
 # Internal sensitivity constant for the rerank signal (Maximum reranker authority)
@@ -37,7 +31,6 @@ RERANK_LAMBDA = 1
 
 # Length limits
 RERANK_MAX_LENGTH = 2048
-DNA_MAX_LENGTH = 60_000
 
 # --- Default FAISS Threads ---
 DEFAULT_FAISS_THREADS = int(os.getenv("FAISS_DEFAULT_THREADS", max(1, os.cpu_count())))

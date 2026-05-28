@@ -48,25 +48,3 @@ def search_protein_top_k(
     )
     results = response.json()["results"]
     return [(r["accession"], r["score"]) for r in results]
-
-def search_dna_top_k(
-    query_sequence: str,
-    k: int = 25
-) -> List[Tuple[str, float]]:
-    """
-    Client function to call the unified DNA search service.
-    """
-    print(f"Searching DNA index for top {k} matches...")
-    if not _search_service_alive():
-        raise ConnectionError(
-            f"Search service at {SEARCH_SERVICE_URL} is not reachable — "
-            "is the gateway (services/search_service.py) running on the "
-            "expected port?"
-        )
-
-    response = default_api_client.request_with_retry(
-        "POST", f"{SEARCH_SERVICE_URL}/search/dna",
-        json={"sequence": query_sequence, "k": k}
-    )
-    results = response.json()["results"]
-    return [(r["accession"], r["score"]) for r in results]
