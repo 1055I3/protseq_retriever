@@ -6,12 +6,8 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-# Add parent and grandparent dirs to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from services.config import (
-    DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH,
-    HNSW_M, HNSW_EF_CONSTRUCTION, H5_BATCH_SIZE
-)
+from config.settings import DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH
+from config.service_params import HNSW_M, HNSW_EF_CONSTRUCTION, H5_BATCH_SIZE
 
 def build_faiss_index():
     """

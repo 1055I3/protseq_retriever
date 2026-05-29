@@ -2,7 +2,7 @@ import httpx
 import time
 import random
 from typing import Callable, Any
-from src.config import MAX_RETRIES, BACKOFF_FACTOR, FETCH_TIMEOUT
+from config.settings import MAX_RETRIES, BACKOFF_FACTOR, FETCH_TIMEOUT
 
 class APIClient:
     """

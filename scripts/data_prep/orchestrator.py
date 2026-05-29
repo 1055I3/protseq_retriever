@@ -17,14 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Add parent and grandparent dirs to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from data_prep.downloader import download_swissprot
-from data_prep.embedder import embed_sequences
-from data_prep.indexer import build_faiss_index
-from data_prep.convert_h5_layout import convert_h5_to_compatible
-from services.config import DEFAULT_H5_PATH
+from scripts.data_prep.downloader import download_swissprot
+from scripts.data_prep.embedder import embed_sequences
+from scripts.data_prep.indexer import build_faiss_index
+from scripts.data_prep.convert_h5_layout import convert_h5_to_compatible
+from config.settings import DEFAULT_H5_PATH
 
 def run_pipeline():
     """

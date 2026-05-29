@@ -6,9 +6,8 @@ import polars as pl
 import torch
 from tqdm import tqdm
 
-# Add parent and grandparent dirs to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from services.config import PROTEIN_MODEL_NAME, ESMC_MAX_LENGTH, DEFAULT_H5_PATH, SWISSPROT_CSV_PATH
+from config.settings import DEFAULT_H5_PATH, SWISSPROT_CSV_PATH
+from config.service_params import PROTEIN_MODEL_NAME, ESMC_MAX_LENGTH
 
 def embed_sequences():
     """

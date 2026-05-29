@@ -1,6 +1,6 @@
 import os
 import re
-from src.config import ALLOWED_DATA_DIR
+from config.settings import ALLOWED_DATA_DIR
 
 def is_secure_path(path: str) -> bool:
     """Verifies if the path is within the allowed directory."""

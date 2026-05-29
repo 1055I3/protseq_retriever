@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Union
 
 # Import the async interface
-from retriever_interface import run_retriever
+from bioseq.app.cli.retriever_interface import run_retriever
 
 # =============================================================================
 # DATA STRUCTURES

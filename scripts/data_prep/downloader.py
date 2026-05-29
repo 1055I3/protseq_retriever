@@ -4,10 +4,8 @@ import polars as pl
 import time
 from typing import List, Dict, Any, Optional
 
-# Add parent and grandparent dirs to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from src.api_client import default_api_client
-from services.config import SWISSPROT_CSV_PATH
+from bioseq.infra.clients.api_client import default_api_client
+from config.settings import SWISSPROT_CSV_PATH
 
 def download_swissprot():
     """

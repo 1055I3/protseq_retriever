@@ -23,14 +23,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 # Add parent dir to path to import config
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from services.config import (
+from config.settings import (
     DEFAULT_H5_PATH, DEFAULT_INDEX_PATH, DEFAULT_CACHE_PATH, SWISSPROT_CSV_PATH,
-    HNSW_M, HNSW_EF_CONSTRUCTION, HNSW_EF_SEARCH, RANDOM_SEED,
-    SEARCH_SERVICE_HOST, SEARCH_SERVICE_PORT,
+    HNSW_EF_SEARCH, RANDOM_SEED,
+    SEARCH_SERVICE_HOST, SEARCH_SERVICE_PORT
+)
+from config.service_params import (
     PROTEIN_MODEL_NAME, REFINE_MODEL_NAME,
-    DEFAULT_FAISS_THREADS, H5_BATCH_SIZE,
-    REFINE_LAMBDA, REFINE_MAX_LENGTH, ESMC_MAX_LENGTH
+    H5_BATCH_SIZE, REFINE_LAMBDA, REFINE_MAX_LENGTH, ESMC_MAX_LENGTH
 )
 
 app = FastAPI(title="Unified BioSeq Gateway Service (ESMC-300M)")
@@ -46,7 +46,12 @@ np.random.seed(RANDOM_SEED)
 TOTAL_CORES = os.cpu_count() or 1
 faiss.omp_set_num_threads(TOTAL_CORES)
 torch.set_num_threads(TOTAL_CORES)
-torch.set_num_interop_threads(TOTAL_CORES)
+if device.type == 'cpu':
+    try:
+        torch.set_num_interop_threads(TOTAL_CORES)
+    except RuntimeError:
+        # Interop threads can only be set once
+        pass
 logger.info(f"Parallelism Optimized: FAISS and PyTorch using {TOTAL_CORES} threads (Intra/Inter-op).")
 
 # =============================================================================

@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
-from src.config import SEARCH_SERVICE_URL
-from src.api_client import default_api_client
+from config.settings import SEARCH_SERVICE_URL
+from bioseq.infra.clients.api_client import default_api_client
 
 class LocalRefiner:
     """

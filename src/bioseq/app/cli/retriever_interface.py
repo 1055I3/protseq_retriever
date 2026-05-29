@@ -4,8 +4,8 @@ import argparse
 import asyncio
 from typing import Dict, Any
 
-from src.pipeline import run_bioseq_pipeline
-from src.utils import setup_environment
+from bioseq.app.pipeline.retrieval_pipeline import run_bioseq_pipeline
+from bioseq.common.utils import setup_environment
 
 async def run_retriever(user_prompt: str) -> Dict[str, Any]:
     """

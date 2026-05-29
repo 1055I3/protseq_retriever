@@ -8,11 +8,11 @@ import re
 import asyncio
 import json
 
-from src.utils import get_llm, clean_sequence
-from src.search import search_protein_top_k
-from src.refining import LocalRefiner
+from bioseq.common.utils import get_llm, clean_sequence
+from bioseq.core.retrieval.search_client import search_protein_top_k
+from bioseq.core.retrieval.refining_client import LocalRefiner
 
-from src.config import RETRIEVAL_TOP_K, REFINE_TOP_N
+from config.settings import RETRIEVAL_TOP_K, REFINE_TOP_N
 
 
 # =============================================================================
