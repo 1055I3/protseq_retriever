@@ -1,6 +1,6 @@
 import pytest
 import re
-from bioseq.app.pipeline.retrieval_pipeline import security_scan_node, PipelineState
+from protseq.app.pipeline.retrieval_pipeline import security_scan_node, PipelineState
 
 @pytest.mark.asyncio
 async def test_security_scan_node_passes_safe_prompt():

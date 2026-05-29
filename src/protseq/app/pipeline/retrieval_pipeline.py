@@ -8,9 +8,9 @@ import re
 import asyncio
 import json
 
-from bioseq.common.utils import get_llm, clean_sequence
-from bioseq.core.retrieval.search_client import search_protein_top_k
-from bioseq.core.retrieval.refining_client import LocalRefiner
+from protseq.common.utils import get_llm, clean_sequence
+from protseq.core.retrieval.search_client import search_protein_top_k
+from protseq.core.retrieval.refining_client import LocalRefiner
 
 from config.settings import RETRIEVAL_TOP_K, REFINE_TOP_N
 
@@ -200,7 +200,7 @@ async def summary_node(state: PipelineState, config: RunnableConfig) -> Pipeline
 # =============================================================================
 
 # Construct the linear chain using the pipe operator
-_bioseq_chain = (
+_protseq_chain = (
     security_scan_node | 
     extraction_node | 
     search_node | 
@@ -208,11 +208,12 @@ _bioseq_chain = (
     summary_node
 )
 
-async def run_bioseq_pipeline(prompt: str) -> Dict[str, Any]:
+async def run_protseq_pipeline(prompt: str) -> Dict[str, Any]:
     """
     Client-facing interface for the BioSeq Retriever pipeline.
     Orchestrates a linear LangChain LCEL cascade with short-circuit error handling.
     """
+
     initial_state: PipelineState = {
         "prompt": prompt,
         "sequence": None,
@@ -223,6 +224,6 @@ async def run_bioseq_pipeline(prompt: str) -> Dict[str, Any]:
     }
     
     # Execute the chain
-    final_state = await _bioseq_chain.ainvoke(initial_state)
+    final_state = await _protseq_chain.ainvoke(initial_state)
     
     return dict(final_state)

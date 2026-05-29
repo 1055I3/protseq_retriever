@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Union
 
 # Import the async interface
-from bioseq.app.cli.retriever_interface import run_retriever
+from protseq.app.cli.retriever_interface import run_retriever
 
 # =============================================================================
 # DATA STRUCTURES
@@ -60,7 +60,7 @@ def evaluate_constraints(matches: List[Dict[str, Any]], constraints: Dict[str, A
 # EVALUATOR ENGINE
 # =============================================================================
 
-class BioSeqEvaluator:
+class ProtseqEvaluator:
     def __init__(self):
         # Restoring representative suite + negatives/security
         self.test_cases = [
@@ -149,5 +149,5 @@ class BioSeqEvaluator:
         print(f"\nOVERALL: {passed}/{len(self.test_cases)} ({passed/len(self.test_cases):.1%})")
 
 if __name__ == "__main__":
-    evaluator = BioSeqEvaluator()
+    evaluator = ProtseqEvaluator()
     asyncio.run(evaluator.run_evaluation())

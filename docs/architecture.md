@@ -1,19 +1,19 @@
-# BioSeq Retriever: Architectural Documentation
+# Protseq Retriever: Architectural Documentation
 
 ## 1. Design Philosophy
 The system prioritizes **determinism**, **production-grade robustness**, and **modular separation of concerns**. The pipeline uses **LCEL (LangChain Expression Language)** to enforce a strictly linear, short-circuiting flow for biological data retrieval.
 
 ## 2. Module Boundary Ownership
 - `config/`: Single source of truth for runtime, service, and infrastructure parameters.
-- `src/bioseq/app/`: The "Application" layer. Handles orchestrations and entry points.
-- `src/bioseq/core/`: The "Domain" layer. Contains pure bioinformatics business logic (e.g., how we calculate relevance).
-- `src/bioseq/infra/`: The "Infrastructure" layer. Contains technology-specific adapters (FAISS, UniProt API Client, Polars metadata storage).
+- `src/protseq/app/`: The "Application" layer. Handles orchestrations and entry points.
+- `src/protseq/core/`: The "Domain" layer. Contains pure bioinformatics business logic (e.g., how we calculate relevance).
+- `src/protseq/infra/`: The "Infrastructure" layer. Contains technology-specific adapters (FAISS, UniProt API Client, Polars metadata storage).
 - `scripts/`: Operational utilities (data preparation, indexing).
 - `tests/`: Organized by test scope (Unit, Integration, Benchmarks).
 
 ## 3. Runtime Lifecycle
 1. **Gateway Initialization**: `services/search_service.py` initializes upon startup, verifying the presence of indexed embedding and metadata files. If critical assets are missing, it shuts down with actionable feedback.
-2. **Pipeline Invocation**: The `bioseq.app.cli.retriever_interface` invokes `run_bioseq_pipeline`.
+2. **Pipeline Invocation**: The `protseq.app.cli.retriever_interface` invokes `run_protseq_pipeline`.
 3. **LCEL Cascade**:
     - **Security Guard**: Regex scan for injection patterns.
     - **Extraction (LLM)**: Structured extraction of the protein sequence and biological context.

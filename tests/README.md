@@ -3,16 +3,16 @@
 ## 1. Scope and Coverage Priorities
 The testing strategy is organized by architectural layer to ensure deterministic, isolated, and contract-based validation.
 
-### Priority 1: Core Domain Logic (`tests/unit/bioseq/core/`)
+### Priority 1: Core Domain Logic (`tests/unit/protseq/core/`)
 - **Retrieval Logic**: Validate `LocalRefiner` and `search_client`. Focus on mathematical correctness of fusion algorithms and interaction contracts.
 - **Summary Logic**: Verify `summary_node` output quality for non-experts.
 
-### Priority 2: Infrastructure Adapters (`tests/unit/bioseq/infra/` & `tests/integration/infra/`)
+### Priority 2: Infrastructure Adapters (`tests/unit/protseq/infra/` & `tests/integration/infra/`)
 - **API Client**: Unit test retries, exponential backoff, and exception handling.
 - **Storage**: Unit test `DataFetcher` (metadata CSV loading).
 - **Vector Store**: Unit test index loading (mocking FAISS index file interactions).
 
-### Priority 3: Application Layer (`tests/unit/bioseq/app/` & `tests/integration/app/`)
+### Priority 3: Application Layer (`tests/unit/protseq/app/` & `tests/integration/app/`)
 - **Pipeline**: Test the linear LCEL chain (security scan -> extraction -> search -> refine -> summary). Use mocks for LLM and Search Service.
 - **API Gateway**: Integration tests for FastAPI endpoints (protein search, refine).
 
@@ -31,7 +31,7 @@ The testing strategy is organized by architectural layer to ensure deterministic
 ```text
 tests/
 ├── unit/
-│   ├── bioseq/
+│   ├── protseq/
 │   │   ├── app/      # Pipeline orchestration logic
 │   │   ├── core/     # Domain retrieval/refinement
 │   │   └── infra/    # Low-level infrastructure adapters

@@ -28,7 +28,7 @@ def run_pipeline():
     Orchestrates the entire Swiss-Prot Data Preparation Pipeline.
     Designed to be robust and resume-able.
     """
-    logger.info("=== Starting BioSeq Data Preparation Pipeline ===")
+    logger.info("=== Starting Protseq Data Preparation Pipeline ===")
     
     # 1. Download Metadata
     try:
@@ -79,7 +79,7 @@ def run_pipeline():
         logger.error(traceback.format_exc())
         return
 
-    logger.info("=== BioSeq Data Preparation Pipeline Successfully Completed ===")
+    logger.info("=== Protseq Data Preparation Pipeline Successfully Completed ===")
 
 if __name__ == "__main__":
     run_pipeline()

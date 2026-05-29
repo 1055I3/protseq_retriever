@@ -23,10 +23,10 @@ def clean_sequence(sequence: str) -> str:
     return cleaned.upper()
 
 def _select_provider(provider: str | None = None) -> str:
-    requested = (provider or os.getenv("BIOSEQ_LLM_PROVIDER") or "").strip().lower()
+    requested = (provider or os.getenv("PROTSEQ_LLM_PROVIDER") or "").strip().lower()
     if requested:
         if requested not in {"mistral", "openai"}:
-            raise ValueError("BIOSEQ_LLM_PROVIDER must be either 'mistral' or 'openai'.")
+            raise ValueError("PROTSEQ_LLM_PROVIDER must be either 'mistral' or 'openai'.")
         return requested
     if os.getenv("MISTRAL_API_KEY"):
         return "mistral"
@@ -65,7 +65,7 @@ def get_llm(temperature=0):
 
 def get_text_embedder():
     """Returns a configured embeddings instance for text/context."""
-    provider = _select_provider(os.getenv("BIOSEQ_EMBEDDINGS_PROVIDER"))
+    provider = _select_provider(os.getenv("PROTSEQ_EMBEDDINGS_PROVIDER"))
     setup_environment(provider)
     if provider == "openai":
         from langchain_openai import OpenAIEmbeddings

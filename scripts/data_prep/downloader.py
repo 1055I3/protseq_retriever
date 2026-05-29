@@ -4,7 +4,7 @@ import polars as pl
 import time
 from typing import List, Dict, Any, Optional
 
-from bioseq.infra.clients.api_client import default_api_client
+from protseq.infra.clients.api_client import default_api_client
 from config.settings import SWISSPROT_CSV_PATH
 
 def download_swissprot():

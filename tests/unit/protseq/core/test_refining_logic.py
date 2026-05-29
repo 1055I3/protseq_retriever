@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from bioseq.app.gateway.search_service import _compute_conformal_uncertainty
+from protseq.app.gateway.search_service import _compute_conformal_uncertainty
 
 def test_conformal_uncertainty_basic_distribution():
     scores = np.array([1.0, 0.8, 0.6, 0.4, 0.2])

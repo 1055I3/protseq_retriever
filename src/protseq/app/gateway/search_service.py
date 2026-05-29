@@ -33,7 +33,7 @@ from config.service_params import (
     H5_BATCH_SIZE, REFINE_LAMBDA, REFINE_MAX_LENGTH, ESMC_MAX_LENGTH
 )
 
-app = FastAPI(title="Unified BioSeq Gateway Service (ESMC-300M)")
+app = FastAPI(title="Unified Protseq Gateway Service (ESMC-300M)")
 executor = ThreadPoolExecutor(max_workers=8)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

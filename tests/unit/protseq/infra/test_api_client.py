@@ -1,5 +1,5 @@
 import pytest
-from bioseq.infra.clients.api_client import APIClient
+from protseq.infra.clients.api_client import APIClient
 import httpx
 from unittest.mock import MagicMock
 

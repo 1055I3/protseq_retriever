@@ -36,11 +36,11 @@ def convert_h5_to_compatible(source_path, target_path):
         print(f"\nConversion failed: {str(e)}")
 
 if __name__ == "__main__":
-    src_file = 'bioseq_retriever/data/per-gene.h5'
-    backup_file = 'bioseq_retriever/data/per-gene.h5.compact'
+    src_file = 'protseq_retriever/data/per-gene.h5'
+    backup_file = 'protseq_retriever/data/per-gene.h5.compact'
     
     # We will write to a temp file and then rename
-    temp_target = 'bioseq_retriever/data/per-gene_compatible.h5'
+    temp_target = 'protseq_retriever/data/per-gene_compatible.h5'
     
     convert_h5_to_compatible(src_file, temp_target)
     

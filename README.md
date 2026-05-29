@@ -60,13 +60,13 @@ python -m scripts.data_prep.orchestrator
 
 ### 1. Start the Search Gateway
 ```bash
-python -m src.bioseq.app.gateway.search_service
+python -m src.protseq.app.gateway.search_service
 ```
 
 ### 2. Run the Interface
 ```bash
 # Query the system
-python -m src.bioseq.app.cli.retriever_interface "Identify sequence: MKTLL... related to insulin."
+python -m src.protseq.app.cli.retriever_interface "Identify sequence: MKTLL... related to insulin."
 ```
 
 ---
@@ -88,5 +88,5 @@ python tests/benchmarks/e2e_eval.py
 
 ## 📖 Contributor Guide
 - **Commit Conventions**: Conventional commits required (`feat:`, `fix:`, `refactor:`, `docs:`).
-- **Architectural Constraints**: Never import outside the `bioseq.` or `config.` namespace.
+- **Architectural Constraints**: Never import outside the `protseq.` or `config.` namespace.
 - **Review Expectations**: All changes must maintain deterministic behavior. Avoid mocking unless external systems are involved.

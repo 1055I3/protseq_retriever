@@ -1,10 +1,10 @@
 from typing import List, Dict, Any
 from config.settings import SEARCH_SERVICE_URL
-from bioseq.infra.clients.api_client import default_api_client
+from protseq.infra.clients.api_client import default_api_client
 
 class LocalRefiner:
     """
-    Client for the Unified BioSeq Gateway Refining service.
+    Client for the Unified Protseq Gateway Refining service.
     Sends candidate records and context query to the remote service for biological refining.
     """
     def __init__(self):

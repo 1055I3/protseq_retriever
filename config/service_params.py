@@ -8,7 +8,7 @@ RANDOM_SEED = 42
 
 # --- Model Settings ---
 PROTEIN_MODEL_NAME = "esmc-300m-2024-12"
-REFINE_MODEL_NAME = os.getenv("BIOSEQ_REFINE_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+REFINE_MODEL_NAME = os.getenv("PROTSEQ_REFINE_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 
 # Internal sensitivity constant for the refine signal (Maximum refiner authority)
 REFINE_LAMBDA = 1
@@ -22,4 +22,4 @@ DEFAULT_FAISS_THREADS = int(os.getenv("FAISS_DEFAULT_THREADS", max(1, os.cpu_cou
 
 # --- HDF5 Loading Settings ---
 # Batch size for reading embeddings from H5 files during index construction
-H5_BATCH_SIZE = int(os.getenv("BIOSEQ_H5_BATCH_SIZE", "1000"))
+H5_BATCH_SIZE = int(os.getenv("PROTSEQ_H5_BATCH_SIZE", "1000"))

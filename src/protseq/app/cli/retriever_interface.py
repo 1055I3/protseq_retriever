@@ -4,18 +4,18 @@ import argparse
 import asyncio
 from typing import Dict, Any
 
-from bioseq.app.pipeline.retrieval_pipeline import run_bioseq_pipeline
-from bioseq.common.utils import setup_environment
+from protseq.app.pipeline.retrieval_pipeline import run_protseq_pipeline
+from protseq.common.utils import setup_environment
 
 async def run_retriever(user_prompt: str) -> Dict[str, Any]:
     """
-    Asynchronous interface for the BioSeq Retriever.
+    Asynchronous interface for the Protseq Retriever.
     Executes the pipeline and masks internal state/computation details 
     before returning the final biological results and summary.
     """
     setup_environment()
     
-    raw_result = await run_bioseq_pipeline(user_prompt)
+    raw_result = await run_protseq_pipeline(user_prompt)
 
     masked_result = {
         "results": raw_result.get("results"),
@@ -27,7 +27,7 @@ async def run_retriever(user_prompt: str) -> Dict[str, Any]:
 
 def main():
     """Synchronous entry point for CLI usage."""
-    parser = argparse.ArgumentParser(description="BioSeq Retriever: ESMC-300M Powered Retrieval")
+    parser = argparse.ArgumentParser(description="Protseq Retriever: ESMC-300M Powered Retrieval")
     parser.add_argument(
         "prompt", 
         type=str, 

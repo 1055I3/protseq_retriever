@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import httpx
 
 from config.settings import SEARCH_SERVICE_URL, SEARCH_PROBE_TIMEOUT
-from bioseq.infra.clients.api_client import default_api_client
+from protseq.infra.clients.api_client import default_api_client
 
 
 def _search_service_alive(url: str = SEARCH_SERVICE_URL, timeout: float = SEARCH_PROBE_TIMEOUT) -> bool:

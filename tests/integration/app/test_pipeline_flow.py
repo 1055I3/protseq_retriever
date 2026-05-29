@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from bioseq.app.pipeline.retrieval_pipeline import PipelineState, security_scan_node, extraction_node
+from protseq.app.pipeline.retrieval_pipeline import PipelineState, security_scan_node, extraction_node
 
 @pytest.mark.asyncio
 async def test_pipeline_short_circuit_on_security_error():
