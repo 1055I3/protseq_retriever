@@ -1,102 +1,92 @@
 # BioSeq Retriever
 
-BioSeq Retriever is an advanced bioinformatics pipeline designed for context-aware protein sequence search. It leverages Large Language Models (LLMs), LangGraph, and FAISS to provide a highly flexible system that can interpret natural language queries and perform multi-stage similarity searches.
+BioSeq Retriever is a high-performance, context-aware protein sequence retrieval and refining system. It leverages state-of-the-art protein embedding models (ESMC-300M) and semantic refining via cross-encoder fusion to identify and rank Swiss-Prot entries based on natural language queries.
 
-## Setup Instructions
+## Background
+The BLAST algorithm, developed in the early 1990s, has long been the standard tool for comparing biological sequences and querying genomic databases. Since then, advances in natural language processing have introduced embeddings — vector representations capable of capturing semantic relationships in data. More recently, similar approaches have been applied to biological sequences, treating proteins as a biological language. Unlike traditional alignment-based methods, embeddings can capture higher-level relationships between sequences, opening up new possibilities for faster and more scalable similarity searches.
 
-### 1. Create Conda Environment
+---
+
+## 🏗️ Architecture Overview
+
+The system is designed as a modular, asynchronous pipeline:
+1.  **Orchestration Layer**: Uses LangChain LCEL to manage extraction, security, and data flow.
+2.  **Gateway Service**: A high-performance FastAPI backend serving vector similarity search (FAISS HNSW) and contextual refining (Qwen3).
+3.  **Data Engineering**: Robust, modular pipeline for Swiss-Prot ingestion, ESMC-300M embedding, and HNSW index construction.
+
+### Data Flow
+`User Prompt` → `Security Guard` → `Extraction (LLM)` → `Vector Search (FAISS)` → `Refining (Semantic Fusion)` → `Summary (Plain Language)`
+
+---
+
+## 🛠️ Technology Stack
+- **Languages**: Python 3.12+
+- **Machine Learning**: `biohub/esm` (ESMC-300M), `transformers` (Qwen3-Embedding), `PyTorch`, `FAISS`.
+- **API & Concurrency**: `FastAPI`, `uvicorn`, `asyncio`, `httpx`.
+- **Data Engineering**: `Polars`, `h5py`.
+- **Pipeline**: `LangChain` (LCEL), `Pydantic` (structured output).
+- **Testing**: `pytest`, `pytest-asyncio`.
+
+---
+
+## 🚀 Setup & Installation
+
+### 1. Environment Setup
 ```bash
 conda create -n bioseq python=3.12 -y
 conda activate bioseq
+# Install esm from source as required by biohub
+pip install esm@git+https://github.com/Biohub/esm.git
+pip install -r requirements.txt # See requirements.txt for full dependency list
 ```
 
-### 2. Install Dependencies
-Install the required packages using Conda where available, and pip for others:
+### 2. Configuration
+The system is configured via files in the `config/` directory. Environment variables override these settings.
+- `config/settings.py`: Global environment, API keys, and service URLs.
+- `config/service_params.py`: Model names, FAISS HNSW tuning, and length constraints.
+
+---
+
+## ⚙️ Data Preparation
+To populate the system with protein data, run the data prep pipeline:
 ```bash
-conda install -c conda-forge h5py faiss-cpu numpy httpx pyfaidx transformers pytorch fastapi uvicorn -y
-pip install langchain-mistralai langchain-openai langgraph tiktoken sentencepiece protobuf
+python -m scripts.data_prep.orchestrator
 ```
+*Note: This process is robust with checkpointing. If interrupted, simply rerun it.*
 
-*Note: If you have a GPU, you might prefer `faiss-gpu`.*
+---
 
-### 3. Configuration & API Keys
-The pipeline requires either a **Mistral AI API Key** or an **OpenAI API Key**.
+## 🔌 Running the System
 
-#### Security & Paths
-Configure the data environment using the following variables:
-- `BIOSEQ_H5_PATH`: Path to the .h5 embeddings file (default: `data/per-protein.h5`).
-- `BIOSEQ_INDEX_PATH`: Path to the FAISS index (default: derived from H5 path).
-- `BIOSEQ_ACCESSIONS_CACHE_PATH`: Path to the accession JSON cache (default: derived from H5 path).
-- `BIOSEQ_FETCH_TIMEOUT`: Timeout for UniProt API calls in seconds (default: `300.0`).
-
-#### AI Providers
-To force a provider or model:
+### 1. Start the Search Gateway
 ```bash
-export BIOSEQ_LLM_PROVIDER=mistral # or 'openai'
-export BIOSEQ_EMBEDDINGS_PROVIDER=mistral # or 'openai'
-export MISTRAL_API_KEY='your-key'
+python -m src.bioseq.app.gateway.search_service
 ```
 
-## What This Code Does
-- **Intelligent Sequence Extraction**: Uses LLMs with schema-guided reasoning to extract protein sequences and biological context from natural language prompts.
-- **Hardened Security**: Implements multi-layer defense against prompt injection and unauthorized command execution.
-- **High-Dimensional Similarity Search**: Performs initial ranking of protein sequences using ProtT5 embeddings.
-- **Contextual Refining**: Refines results using semantic context-aware refining (previously known as reranking) via a cross-encoder-style embedding fusion.
-- **UniProt Data Integration**: Fetches rich biological metadata with built-in timeouts and error handling.
-
-## Integration: Using the Pipeline
-### Command Line Interface
-You can run the pipeline directly from the terminal:
+### 2. Run the Interface
 ```bash
-python pipeline_interface.py "I have a sequence: MALW... find matches involved in insulin signaling."
+# Query the system
+python -m src.bioseq.app.cli.retriever_interface "Identify sequence: MKTLL... related to insulin."
 ```
 
-### Python API
-```python
-from src.pipeline import run_bioseq_pipeline
+---
 
-# Invoke the pipeline
-result = run_bioseq_pipeline("Compare this sequence: MKTLL... against human insulin markers.")
-```
-
-## Execution Flow
-1. **Extraction & Hardening**: The LLM parses the prompt, extracts the sequence, and validates the request against security protocols.
-2. **Short-Circuit Error Handling**: If any node fails or a security breach is detected, the graph immediately terminates.
-3. **Similarity Search**: Performs high-speed vector search in the FAISS index.
-4. **Contextual Refining**: Top matches are refined based on semantic alignment with the user's biological query context.
-
-## Running the System
-The system relies on the **Unified BioSeq Gateway Service** to handle all sequence embedding, similarity search, and contextual refining.
-
-### Start the Unified Gateway Service
+## 🧪 Testing and Benchmarks
+The repository includes an E2E evaluation suite designed to validate behavioral correctness:
 ```bash
-python services/search_service.py
-```
-This service loads the required models (ProtT5, Qwen3) and FAISS indices, exposing endpoints for protein search and biological refining.
-
-### Run Pipeline
-The pipeline now operates asynchronously:
-```bash
-python pipeline_interface.py "I have a sequence: MALW..."
+python tests/benchmarks/e2e_eval.py
 ```
 
-## Project & File Structure
-- `src/`: Core logic and pipeline modules.
-  - pipeline.py: LangGraph workflow and LLM node orchestration.
-  - refining.py: Semantic similarity logic using instruction-aware embeddings.
-  - utils.py: API environment setup, FASTA parsing, and sequence cleaning.
-  - search.py: Unified Search Service client.
-  - api_client.py: Centralized API client with pooling and exponential backoff.
-  - config.py: Environment configuration and service settings.
-  - data_fetcher.py: REST client for UniProt using `httpx`.
-- services/: Unified Search Service.
-  - search_service.py: Unified gateway for Protein embeddings, FAISS indices, and biological refining.
-  - config.py: Service-specific configuration (ports, FAISS params).
-- `data/`: Directory for embeddings and FAISS indexes.
-- `pipeline_interface.py`: CLI entry point script.
-- `e2e_eval.py`: Hardened protein-only evaluation suite.
+---
 
-## Limitations and Remarks
-- **API Dependency**: Requires an active Mistral AI or OpenAI API key.
-- **Memory Usage**: ProtT5 loading requires significant RAM (~8GB+ recommended).
-- **No DNA Support**: This version is strictly optimized for protein sequences. Filepath resolution has been removed in favor of direct sequence input.
+## 🔐 Security Considerations
+- **Prompt Injection**: The pipeline implements a regex-based security guard and LLM-guided security scan in `security_scan_node`.
+- **Input Validation**: Sequences are sanitized via `clean_sequence` to prevent non-biological characters from entering the model.
+- **Service Isolation**: The Gateway Service validates local data integrity on startup to prevent operational risks from malformed indexes.
+
+---
+
+## 📖 Contributor Guide
+- **Commit Conventions**: Conventional commits required (`feat:`, `fix:`, `refactor:`, `docs:`).
+- **Architectural Constraints**: Never import outside the `bioseq.` or `config.` namespace.
+- **Review Expectations**: All changes must maintain deterministic behavior. Avoid mocking unless external systems are involved.
