@@ -1,6 +1,6 @@
-# BioSeq Retriever
+# ProtSeq Retriever
 
-BioSeq Retriever is a high-performance, context-aware protein sequence retrieval and refining system. It leverages state-of-the-art protein embedding models (ESMC-300M) and semantic refining via cross-encoder fusion to identify and rank Swiss-Prot entries based on natural language queries.
+ProtSeq Retriever is a high-performance, context-aware protein sequence retrieval and refining system. It leverages state-of-the-art protein embedding models (ESMC-300M) and semantic refining via cross-encoder fusion to identify and rank Swiss-Prot entries based on natural language queries.
 
 ## Background
 The BLAST algorithm, developed in the early 1990s, has long been the standard tool for comparing biological sequences and querying genomic databases. Since then, advances in natural language processing have introduced embeddings — vector representations capable of capturing semantic relationships in data. More recently, similar approaches have been applied to biological sequences, treating proteins as a biological language. Unlike traditional alignment-based methods, embeddings can capture higher-level relationships between sequences, opening up new possibilities for faster and more scalable similarity searches.
@@ -33,8 +33,8 @@ The system is designed as a modular, asynchronous pipeline:
 
 ### 1. Environment Setup
 ```bash
-conda create -n bioseq python=3.12 -y
-conda activate bioseq
+conda create -n protseq python=3.12 -y
+conda activate protseq
 # Install esm from source as required by biohub
 pip install esm@git+https://github.com/Biohub/esm.git
 pip install -r requirements.txt # See requirements.txt for full dependency list
