@@ -13,22 +13,23 @@ class LocalRefiner:
 
     def refine_by_context(
         self, 
-        records: List[Dict[str, Any]], 
+        hits: List[Dict[str, Any]], 
         context_query: str,
         top_n: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Refines Swiss-Prot candidates by calling the unified /refine service.
+        Refines candidates by calling the unified /refine service.
+        Expects hits with 'accession' and 'score'.
         """
-        if not records:
+        if not hits:
             return []
 
-        print(f"Refining {len(records)} candidates via gateway...")
+        print(f"Refining {len(hits)} candidates via gateway...")
         
         response = default_api_client.request_with_retry(
             "POST", f"{SEARCH_SERVICE_URL}/refine",
             json={
-                "records": records,
+                "hits": hits,
                 "context_query": context_query,
                 "top_n": top_n
             }

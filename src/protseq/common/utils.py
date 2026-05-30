@@ -87,3 +87,44 @@ def get_first_fasta_entry(fasta_path: str) -> tuple[str, str]:
     header = f">{first_record.long_name}"
     sequence = str(first_record)
     return header, clean_sequence(sequence)
+
+from pydantic import BaseModel, Field
+from typing import Any, Dict, Union
+
+class AlignedBiologicalContext(BaseModel):
+    """Structured representation of biological context for alignment with Swiss-Prot."""
+    protein_name: str = Field(default="N/A", description="Full name of the protein.")
+    organism_name: str = Field(default="N/A", description="Scientific name of the organism.")
+    lineage: str = Field(default="N/A", description="Taxonomic lineage (e.g. Eukaryota > Metazoa).")
+    functions: str = Field(default="N/A", description="Description of biological functions.")
+    subcellular_locations: str = Field(default="N/A", description="Where the protein is located in the cell.")
+    go_terms: str = Field(default="N/A", description="Gene Ontology identifiers or terms.")
+    domains_families: str = Field(default="N/A", description="Protein domains, families, or motifs.")
+    keywords: str = Field(default="N/A", description="UniProt keywords.")
+    gene_names: str = Field(default="N/A", description="Associated gene names.")
+
+def format_context_for_embedding(context: Union[AlignedBiologicalContext, Dict[str, Any]]) -> str:
+    """
+    Unifies the formatting path for biological context.
+    Aligns user-provided structured context with Swiss-Prot record fields before embedding.
+    """
+    if isinstance(context, AlignedBiologicalContext):
+        data = context.model_dump()
+    else:
+        data = context
+
+    # Map Swiss-Prot CSV columns to the formatting fields if necessary
+    # Note: downloader.py/search_service.py use:
+    # protein_name, gene_names, organism_name, lineage, comments, xref_go, xref_pfam, keywords
+    
+    parts = [
+        f"Protein: {data.get('protein_name', 'N/A')}",
+        f"Organism: {data.get('organism_name', 'N/A')} (Lineage: {data.get('lineage', 'N/A')})",
+        f"Function: {data.get('functions', data.get('comments', 'N/A'))}",
+        f"Gene Names: {data.get('gene_names', 'N/A')}",
+        f"Subcellular Location: {data.get('subcellular_locations', 'N/A')}",
+        f"Gene Ontology: {data.get('go_terms', data.get('xref_go', 'N/A'))}",
+        f"Domains/Families: {data.get('domains_families', data.get('xref_pfam', 'N/A'))}",
+        f"Keywords: {data.get('keywords', 'N/A')}"
+    ]
+    return ". ".join(parts)

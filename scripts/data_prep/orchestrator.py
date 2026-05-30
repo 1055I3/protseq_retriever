@@ -18,10 +18,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from scripts.data_prep.downloader import download_swissprot
-from scripts.data_prep.embedder import embed_sequences
+from scripts.data_prep.embedder import embed_sequences, embed_contexts
 from scripts.data_prep.indexer import build_faiss_index
 from scripts.data_prep.convert_h5_layout import convert_h5_to_compatible
-from config.settings import DEFAULT_H5_PATH
+from config.settings import DEFAULT_H5_PATH, CONTEXT_H5_PATH
 
 def run_pipeline():
     """
@@ -38,38 +38,47 @@ def run_pipeline():
     except Exception as e:
         logger.error(f"Phase 1 Failed: {e}")
         logger.error(traceback.format_exc())
-        # We might continue if partial data exists, but usually better to fix and rerun
         return
 
-    # 2. Generate Embeddings
+    # 2. Generate Protein Embeddings (Phase 2a)
     try:
-        logger.info("Phase 2: Generating ESMC-300M Embeddings...")
+        logger.info("Phase 2a: Generating ESMC-300M Sequence Embeddings...")
         embed_sequences()
-        logger.info("Phase 2 Complete.")
+        logger.info("Phase 2a Complete.")
     except Exception as e:
-        logger.error(f"Phase 2 Failed: {e}")
+        logger.error(f"Phase 2a Failed: {e}")
         logger.error(traceback.format_exc())
-        logger.info("Note: Embedder supports checkpointing. Fix the issue and rerun orchestrator.")
         return
 
-    # 3. Optimize Layout (Optional but recommended for compatibility)
+    # 3. Generate Context Embeddings (Phase 2b)
     try:
-        logger.info("Phase 3: Optimizing HDF5 Layout for compatibility...")
-        temp_target = f"{DEFAULT_H5_PATH}.compatible"
-        convert_h5_to_compatible(DEFAULT_H5_PATH, temp_target)
-        
-        # Replace original with optimized
-        backup = f"{DEFAULT_H5_PATH}.bak"
-        if os.path.exists(backup): os.remove(backup)
-        os.rename(DEFAULT_H5_PATH, backup)
-        os.rename(temp_target, DEFAULT_H5_PATH)
+        logger.info("Phase 2b: Generating ModernBERT-bio-large Context Embeddings...")
+        embed_contexts()
+        logger.info("Phase 2b Complete.")
+    except Exception as e:
+        logger.error(f"Phase 2b Failed: {e}")
+        logger.error(traceback.format_exc())
+        return
+
+    # 4. Optimize Layout (Optional but recommended for compatibility)
+    try:
+        logger.info("Phase 3: Optimizing HDF5 Layouts for compatibility...")
+        for h5_path in [DEFAULT_H5_PATH, CONTEXT_H5_PATH]:
+            if not os.path.exists(h5_path): continue
+            
+            temp_target = f"{h5_path}.compatible"
+            convert_h5_to_compatible(h5_path, temp_target)
+            
+            backup = f"{h5_path}.bak"
+            if os.path.exists(backup): os.remove(backup)
+            os.rename(h5_path, backup)
+            os.rename(temp_target, h5_path)
         
         logger.info("Phase 3 Complete.")
     except Exception as e:
         logger.warning(f"Phase 3 Failed (Non-critical): {e}")
-        # Not fatal, search_service can still read original if needed
 
-    # 4. Build FAISS Index
+    # 5. Build FAISS Index
     try:
         logger.info("Phase 4: Building FAISS HNSW Index...")
         build_faiss_index()

@@ -8,7 +8,7 @@ RANDOM_SEED = 42
 
 # --- Model Settings ---
 PROTEIN_MODEL_NAME = "esmc-300m-2024-12"
-REFINE_MODEL_NAME = os.getenv("PROTSEQ_REFINE_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+REFINE_MODEL_NAME = os.getenv("PROTSEQ_REFINE_MODEL", "almanach/ModernBERT-bio-large")
 
 # Internal sensitivity constant for the refine signal (Maximum refiner authority)
 REFINE_LAMBDA = 1

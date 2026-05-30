@@ -9,6 +9,7 @@ _h5_base = os.path.splitext(DEFAULT_H5_PATH)[0]
 DEFAULT_INDEX_PATH = os.getenv("PROTSEQ_INDEX_PATH", f"{_h5_base}.index")
 DEFAULT_CACHE_PATH = os.getenv("PROTSEQ_ACCESSIONS_CACHE_PATH", f"{_h5_base}.accessions.json")
 SWISSPROT_CSV_PATH = os.getenv("PROTSEQ_SWISSPROT_CSV_PATH", os.path.join(_DATA_DIR, "swissprot_metadata.csv"))
+CONTEXT_H5_PATH = os.getenv("PROTSEQ_CONTEXT_H5_PATH", os.path.join(_DATA_DIR, "refinement_contexts.h5"))
 
 # --- Security ---
 ALLOWED_DATA_DIR = os.getenv("PROTSEQ_ALLOWED_DATA_DIR", _DATA_DIR)

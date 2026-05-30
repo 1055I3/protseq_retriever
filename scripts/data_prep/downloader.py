@@ -41,6 +41,11 @@ def download_swissprot():
             
             results = data.get("results", [])
             for res in results:
+                locations = []
+                for comment in res.get('comments', []):
+                    if comment.get('commentType') == 'SUBCELLULAR_LOCATION':
+                        locations.extend([l.get('location', {}).get('value', '') for l in comment.get('locations', [])])
+
                 # Flatten complex structures for CSV compatibility
                 record = {
                     "accession": res.get("primaryAccession"),
@@ -50,9 +55,10 @@ def download_swissprot():
                     "organism_name": res.get("organism", {}).get("scientificName", "N/A"),
                     "lineage": " > ".join([t.get("scientificName", "") for t in res.get("organism", {}).get("lineage", [])]),
                     "sequence": res.get("sequence", {}).get("value", ""),
-                    "comments": " | ".join([c.get("texts", [{}])[0].get("value", "") for c in res.get("comments", []) if c.get("commentType") == "FUNCTION"]),
-                    "xref_go": ", ".join([x.get("id") for x in res.get("uniProtKBCrossReferences", []) if x.get("database") == "GO"]),
-                    "xref_pfam": ", ".join([x.get("id") for x in res.get("uniProtKBCrossReferences", []) if x.get("database") == "Pfam"]),
+                    "functions": " | ".join([c.get("texts", [{}])[0].get("value", "") for c in res.get("comments", []) if c.get("commentType") == "FUNCTION"]),
+                    "subcellular_locations": ", ".join(locations),
+                    "go_terms": ", ".join([x.get("id") for x in res.get("uniProtKBCrossReferences", []) if x.get("database") == "GO"]),
+                    "domains_families": ", ".join([x.get("id") for x in res.get("uniProtKBCrossReferences", []) if x.get("database") in ["Pfam", "InterPro"]]),
                     "keywords": ", ".join([k.get("value") for k in res.get("keywords", [])])
                 }
                 all_data.append(record)
@@ -64,23 +70,13 @@ def download_swissprot():
             link_header = response.headers.get("Link")
             next_url = None
             if link_header:
-                # Look for rel="next"
                 for part in link_header.split(","):
                     if 'rel="next"' in part:
                         next_url = part.split(";")[0].strip("< >")
                         break
             
-            # Intermediate save every 50,000 records to prevent extreme memory usage
             if len(all_data) >= 50000:
                 print(f"\nCheckpointing {len(all_data)} records to CSV...")
-                df = pl.from_dicts(all_data)
-                if os.path.exists(SWISSPROT_CSV_PATH):
-                    # Append logic is tricky with CSV in polars, we'll just write new one for simplicity if small,
-                    # but for Swiss-Prot we should ideally append or write in one go at the end if memory allows.
-                    # Given 500k records, memory should be fine (~1-2GB).
-                    pass 
-                # Let's actually just collect all and write at the end for simplicity and data integrity
-                # 570k records * ~2KB/record = ~1.1GB. Fine for modern systems.
         
         print(f"\nDownload complete. Total: {total_downloaded}")
         print("Finalizing CSV file...")
